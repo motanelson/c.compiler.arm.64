@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C to ARM64 Compiler & IDE</title>
+  <style>
+    :root {
+      --bg-canvas: #ffffff;
+      --bg-panel: #ffffff;
+      --border-color: #e2e8f0;
+      --border-focus: #3b82f6;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --error-bg: #fff1f2;
+      --error-text: #be123c;
+      --error-border: #fecdd3;
+      --success-text: #15803d;
+      --line-num-color: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .title-area h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tag {
+      font-size: 0.7rem;
+      background: #f1f5f9;
+      color: #475569;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #cbd5e1;
+      font-weight: 600;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    select, button {
+      font-family: inherit;
+      font-size: 0.85rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    select:hover, button:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    button.primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    .ide-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      flex: 1;
+      height: calc(100vh - 120px);
+      background: #ffffff;
+    }
+
+    .pane {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border-color);
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    .pane:last-child {
+      border-right: none;
+    }
+
+    .pane-header {
+      background: #ffffff;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .editor-wrapper {
+      position: relative;
+      flex: 1;
+      display: flex;
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    .line-numbers {
+      width: 48px;
+      padding: 14px 8px 14px 0;
+      background: #ffffff;
+      border-right: 1px solid #f1f5f9;
+      color: var(--line-num-color);
+      font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+      font-size: 0.85rem;
+      text-align: right;
+      line-height: 1.5;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    textarea, pre {
+      flex: 1;
+      padding: 14px 16px;
+      font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--text-main);
+      background: #ffffff;
+      border: none;
+      outline: none;
+      resize: none;
+      white-space: pre;
+      tab-size: 4;
+      overflow: auto;
+    }
+
+    pre code {
+      font-family: inherit;
+    }
+
+    #error-pane {
+      display: none;
+      padding: 10px 16px;
+      background-color: var(--error-bg);
+      border-top: 1px solid var(--error-border);
+      color: var(--error-text);
+      font-family: monospace;
+      font-size: 0.82rem;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    footer {
+      background: #ffffff;
+      border-top: 1px solid var(--border-color);
+      padding: 6px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-area">
+      <h1>C to ARM64 Compiler <span class="tag">Linux aarch64</span></h1>
+    </div>
+    <div class="toolbar">
+      <select id="exampleSelect">
+        <option value="hello">Example: Hello World</option>
+        <option value="fibonacci">Example: Fibonacci</option>
+        <option value="math">Example: Factorial & Math</option>
+        <option value="loop">Example: Print Numbers</option>
+      </select>
+      <button id="copyBtn">Copy Assembly</button>
+      <button class="primary" id="compileBtn">Compile to ARM64</button>
+    </div>
+  </header>
+
+  <div class="ide-container">
+    <!-- C Source Code Pane -->
+    <div class="pane">
+      <div class="pane-header">
+        <span>C Source (No #include &bull; printf only)</span>
+        <span id="cLinesStatus">Lines: 0</span>
+      </div>
+      <div class="editor-wrapper">
+        <div class="line-numbers" id="cLineNumbers">1</div>
+        <textarea id="cInput" spellcheck="false" placeholder="Write standard C code here..."></textarea>
+      </div>
+    </div>
+
+    <!-- ARM64 Assembly Output Pane -->
+    <div class="pane">
+      <div class="pane-header">
+        <span>ARM64 Assembly (Linux Syscalls)</span>
+        <span id="asmStatus">Ready</span>
+      </div>
+      <div class="editor-wrapper">
+        <div class="line-numbers" id="asmLineNumbers">1</div>
+        <pre id="asmOutput"><code>/* Compiled ARM64 assembly will appear here */</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <div id="error-pane"></div>
+
+  <footer>
+    <span>Target: <code>aarch64-unknown-linux-gnu</code> | Syscalls: <code>sys_write(64)</code>, <code>sys_exit(93)</code></span>
+    <span>Single-page standalone compiler & runtime</span>
+  </footer>
+
+  <script>
+    // --- SAMPLE PROGRAMS ---
+    const EXAMPLES = {
+      hello: `int main() {
+    printf("Hello from bare-metal ARM64!\\n");
+    printf("Exit code will be %d.\\n", 0);
+    return 0;
+}`,
+      fibonacci: `int main() {
+    int n = 10;
+    int a = 0;
+    int b = 1;
+    int i = 0;
+    
+    printf("First 10 Fibonacci numbers:\\n");
+    while (i < n) {
+        printf("%d\\n", a);
+        int next = a + b;
+        a = b;
+        b = next;
+        i = i + 1;
+    }
+    return 0;
+}`,
+      math: `int factorial(int n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+int main() {
+    int val = 5;
+    int res = factorial(val);
+    printf("Factorial of %d is %d\\n", val, res);
+    return 0;
+}`,
+      loop: `int main() {
+    int i = 1;
+    for (i = 1; i <= 5; i = i + 1) {
+        printf("Step %d squared = %d\\n", i, i * i);
+    }
+    return 0;
+}`
+    };
+
+    // --- COMPILER ENGINE ---
+    class Compiler {
+      constructor(source) {
+        this.src = source;
+        this.pos = 0;
+        this.strings = [];
+        this.stringMap = new Map();
+        this.labelCounter = 0;
+      }
+
+      newLabel(prefix = "L") {
+        return `.${prefix}_${this.labelCounter++}`;
+      }
+
+      addString(str) {
+        if (this.stringMap.has(str)) return this.stringMap.get(str);
+        const label = `.LC${this.strings.length}`;
+        this.strings.push({ label, text: str });
+        this.stringMap.set(str, label);
+        return label;
+      }
+
+      tokenize() {
+        if (/#include/.test(this.src)) {
+          throw new Error("Compilation Error: '#include' directives are not permitted per specification.");
+        }
+
+        const tokens = [];
+        let i = 0;
+        const len = this.src.length;
+
+        while (i < len) {
+          const c = this.src[i];
+
+          // Skip whitespaces
+          if (/\s/.test(c)) { i++; continue; }
+
+          // Skip comments
+          if (c === '/' && this.src[i + 1] === '/') {
+            i += 2;
+            while (i < len && this.src[i] !== '\n') i++;
+            continue;
+          }
+          if (c === '/' && this.src[i + 1] === '*') {
+            i += 2;
+            while (i < len && !(this.src[i] === '*' && this.src[i + 1] === '/')) i++;
+            i += 2;
+            continue;
+          }
+
+          // String Literals
+          if (c === '"') {
+            i++;
+            let s = "";
+            while (i < len && this.src[i] !== '"') {
+              if (this.src[i] === '\\' && i + 1 < len) {
+                const next = this.src[i + 1];
+                if (next === 'n') s += '\n';
+                else if (next === 't') s += '\t';
+                else if (next === 'r') s += '\r';
+                else if (next === '\\') s += '\\';
+                else if (next === '"') s += '"';
+                else s += next;
+                i += 2;
+              } else {
+                s += this.src[i++];
+              }
+            }
+            i++; // Skip closing quote
+            tokens.push({ type: 'STRING', val: s });
+            continue;
+          }
+
+          // Numbers
+          if (/[0-9]/.test(c)) {
+            let num = "";
+            while (i < len && /[0-9]/.test(this.src[i])) num += this.src[i++];
+            tokens.push({ type: 'INT', val: parseInt(num, 10) });
+            continue;
+          }
+
+          // Identifiers & Keywords
+          if (/[a-zA-Z_]/.test(c)) {
+            let id = "";
+            while (i < len && /[a-zA-Z0-9_]/.test(this.src[i])) id += this.src[i++];
+            tokens.push({ type: 'IDENT', val: id });
+            continue;
+          }
+
+          // Multi-character Operators
+          const twoChar = this.src.substr(i, 2);
+          if (['==', '!=', '<=', '>='].includes(twoChar)) {
+            tokens.push({ type: 'OP', val: twoChar });
+            i += 2;
+            continue;
+          }
+
+          // Single-character Operators and Punctuation
+          if ('+-*/%<>=(){};,'.includes(c)) {
+            tokens.push({ type: 'PUNCT', val: c });
+            i++;
+            continue;
+          }
+
+          throw new Error(`Unexpected character: '${c}' at offset ${i}`);
+        }
+        tokens.push({ type: 'EOF', val: null });
+        return tokens;
+      }
+
+      compile() {
+        const tokens = this.tokenize();
+        let cursor = 0;
+        const peek = () => tokens[cursor];
+        const next = () => tokens[cursor++];
+        const expect = (val) => {
+          const t = next();
+          if (t.val !== val) throw new Error(`Expected '${val}', got '${t.val}'`);
+          return t;
+        };
+
+        const functions = [];
+
+        // Parse global function definitions
+        while (peek().type !== 'EOF') {
+          // Type: int, void, char
+          const retType = next().val;
+          let name = next().val;
+          expect('(');
+
+          // Parameter list
+          const params = [];
+          if (peek().val !== ')') {
+            while (true) {
+              const ptype = next().val;
+              const pname = next().val;
+              params.push({ type: ptype, name: pname });
+              if (peek().val === ')') break;
+              expect(',');
+            }
+          }
+          expect(')');
+          expect('{');
+
+          // Local symbols table
+          const locals = new Map();
+          let frameOffset = 16; // Save fp/lr take [sp, 0..15]
+
+          params.forEach((p, idx) => {
+            frameOffset += 16;
+            locals.set(p.name, { offset: frameOffset });
+          });
+
+          const body = [];
+
+          // Expression / Statement Parser
+          const parseExpr = () => {
+            return parseComparison();
+          };
+
+          const parseComparison = () => {
+            let left = parseAdditive();
+            while (peek().type === 'OP' || ['<', '>'].includes(peek().val)) {
+              const op = next().val;
+              const right = parseAdditive();
+              left = { type: 'BINARY', op, left, right };
+            }
+            return left;
+          };
+
+          const parseAdditive = () => {
+            let left = parseMultiplicative();
+            while (peek().val === '+' || peek().val === '-') {
+              const op = next().val;
+              const right = parseMultiplicative();
+              left = { type: 'BINARY', op, left, right };
+            }
+            return left;
+          };
+
+          const parseMultiplicative = () => {
+            let left = parsePrimary();
+            while (['*', '/', '%'].includes(peek().val)) {
+              const op = next().val;
+              const right = parsePrimary();
+              left = { type: 'BINARY', op, left, right };
+            }
+            return left;
+          };
+
+          const parsePrimary = () => {
+            const t = next();
+            if (t.type === 'INT') return { type: 'LITERAL', val: t.val };
+            if (t.type === 'STRING') return { type: 'STRING', val: this.addString(t.val) };
+            if (t.val === '(') {
+              const e = parseExpr();
+              expect(')');
+              return e;
+            }
+            if (t.type === 'IDENT') {
+              if (peek().val === '(') {
+                // Function call
+                next(); // '('
+                const args = [];
+                if (peek().val !== ')') {
+                  while (true) {
+                    args.push(parseExpr());
+                    if (peek().val === ')') break;
+                    expect(',');
+                  }
+                }
+                expect(')');
+                return { type: 'CALL', func: t.val, args };
+              }
+              return { type: 'VAR', name: t.val };
+            }
+            throw new Error(`Unexpected token in expression: '${t.val}'`);
+          };
+
+          const parseStatement = () => {
+            const tok = peek();
+
+            // Return Statement
+            if (tok.val === 'return') {
+              next();
+              let expr = null;
+              if (peek().val !== ';') expr = parseExpr();
+              expect(';');
+              return { type: 'RETURN', expr };
+            }
+
+            // If Statement
+            if (tok.val === 'if') {
+              next();
+              expect('(');
+              const cond = parseExpr();
+              expect(')');
+              expect('{');
+              const thenBody = [];
+              while (peek().val !== '}') thenBody.push(parseStatement());
+              expect('}');
+              let elseBody = null;
+              if (peek().val === 'else') {
+                next();
+                expect('{');
+                elseBody = [];
+                while (peek().val !== '}') elseBody.push(parseStatement());
+                expect('}');
+              }
+              return { type: 'IF', cond, thenBody, elseBody };
+            }
+
+            // While Loop
+            if (tok.val === 'while') {
+              next();
+              expect('(');
+              const cond = parseExpr();
+              expect(')');
+              expect('{');
+              const whileBody = [];
+              while (peek().val !== '}') whileBody.push(parseStatement());
+              expect('}');
+              return { type: 'WHILE', cond, body: whileBody };
+            }
+
+            // For Loop
+            if (tok.val === 'for') {
+              next();
+              expect('(');
+              const init = parseStatement();
+              const cond = parseExpr();
+              expect(';');
+              const update = parseExpr();
+              expect(')');
+              expect('{');
+              const forBody = [];
+              while (peek().val !== '}') forBody.push(parseStatement());
+              expect('}');
+              return { type: 'FOR', init, cond, update, body: forBody };
+            }
+
+            // Local Variable Declaration
+            if (['int', 'char'].includes(tok.val)) {
+              next();
+              const vname = next().val;
+              frameOffset += 16;
+              locals.set(vname, { offset: frameOffset });
+              let initExpr = null;
+              if (peek().val === '=') {
+                next();
+                initExpr = parseExpr();
+              }
+              expect(';');
+              return { type: 'VAR_DECL', name: vname, initExpr };
+            }
+
+            // Assignment or Function Call Statement
+            if (tok.type === 'IDENT') {
+              if (tokens[cursor + 1] && tokens[cursor + 1].val === '=') {
+                const varName = next().val;
+                next(); // '='
+                const valExpr = parseExpr();
+                expect(';');
+                return { type: 'ASSIGN', name: varName, expr: valExpr };
+              } else {
+                const expr = parseExpr();
+                expect(';');
+                return { type: 'EXPR_STMT', expr };
+              }
+            }
+
+            throw new Error(`Unrecognized statement: '${tok.val}'`);
+          };
+
+          while (peek().val !== '}') {
+            body.push(parseStatement());
+          }
+          expect('}');
+
+          functions.push({
+            name,
+            params,
+            locals,
+            frameSize: (Math.ceil((frameOffset + 16) / 16)) * 16,
+            body
+          });
+        }
+
+        return this.generateARM64(functions);
+      }
+
+      generateARM64(functions) {
+        let asm = [];
+
+        // Header & Directives
+        asm.push(`/* ARM64 Linux Assembly Generated from C source */`);
+        asm.push(`.arch armv8-a`);
+        asm.push(`.text\n`);
+
+        // Emit Program Entry Point (_start) linking Linux sys_exit (syscall #93)
+        asm.push(`/* Linux sys_exit(93) entry point calling main */`);
+        asm.push(`.global _start`);
+        asm.push(`_start:`);
+        asm.push(`    bl main`);
+        asm.push(`    /* sys_exit: x8 = 93, x0 = status */`);
+        asm.push(`    mov x8, #93`);
+        asm.push(`    svc #0\n`);
+
+        // Code Generation for Functions
+        for (const fn of functions) {
+          asm.push(`.global ${fn.name}`);
+          asm.push(`.type ${fn.name}, %function`);
+          asm.push(`${fn.name}:`);
+
+          // Function Prologue
+          asm.push(`    stp x29, x30, [sp, -${fn.frameSize}]!`);
+          asm.push(`    mov x29, sp`);
+
+          // Save passed arguments (x0-x7) into local stack frame
+          fn.params.forEach((p, idx) => {
+            const loc = fn.locals.get(p.name);
+            asm.push(`    str x${idx}, [x29, #${loc.offset}]`);
+          });
+
+          // Expression Generator (Leaves result in x0)
+          const genExpr = (expr) => {
+            if (expr.type === 'LITERAL') {
+              asm.push(`    mov x0, #${expr.val}`);
+            } else if (expr.type === 'STRING') {
+              asm.push(`    adrp x0, ${expr.val}`);
+              asm.push(`    add x0, x0, :lo12:${expr.val}`);
+            } else if (expr.type === 'VAR') {
+              const loc = fn.locals.get(expr.name);
+              if (!loc) throw new Error(`Undeclared variable: ${expr.name}`);
+              asm.push(`    ldr x0, [x29, #${loc.offset}]`);
+            } else if (expr.type === 'BINARY') {
+              genExpr(expr.left);
+              asm.push(`    str x0, [sp, #-16]!`);
+              genExpr(expr.right);
+              asm.push(`    mov x1, x0`);
+              asm.push(`    ldr x0, [sp], #16`);
+
+              switch (expr.op) {
+                case '+': asm.push(`    add x0, x0, x1`); break;
+                case '-': asm.push(`    sub x0, x0, x1`); break;
+                case '*': asm.push(`    mul x0, x0, x1`); break;
+                case '/': asm.push(`    sdiv x0, x0, x1`); break;
+                case '%':
+                  asm.push(`    sdiv x2, x0, x1`);
+                  asm.push(`    msub x0, x2, x1, x0`);
+                  break;
+                case '==':
+                  asm.push(`    cmp x0, x1`);
+                  asm.push(`    cset x0, eq`);
+                  break;
+                case '!=':
+                  asm.push(`    cmp x0, x1`);
+                  asm.push(`    cset x0, ne`);
+                  break;
+                case '<':
+                  asm.push(`    cmp x0, x1`);
+                  asm.push(`    cset x0, lt`);
+                  break;
+                case '>':
+                  asm.push(`    cmp x0, x1`);
+                  asm.push(`    cset x0, gt`);
+                  break;
+                case '<=':
+                  asm.push(`    cmp x0, x1`);
+                  asm.push(`    cset x0, le`);
+                  break;
+                case '>=':
+                  asm.push(`    cmp x0, x1`);
+                  asm.push(`    cset x0, ge`);
+                  break;
+              }
+            } else if (expr.type === 'CALL') {
+              if (expr.func === 'printf') {
+                // Built-in printf support
+                for (let i = 0; i < expr.args.length; i++) {
+                  genExpr(expr.args[i]);
+                  asm.push(`    str x0, [sp, #-16]!`);
+                }
+                for (let i = expr.args.length - 1; i >= 0; i--) {
+                  asm.push(`    ldr x${i}, [sp], #16`);
+                }
+                asm.push(`    bl __sys_printf`);
+              } else {
+                for (let i = 0; i < expr.args.length; i++) {
+                  genExpr(expr.args[i]);
+                  asm.push(`    str x0, [sp, #-16]!`);
+                }
+                for (let i = expr.args.length - 1; i >= 0; i--) {
+                  asm.push(`    ldr x${i}, [sp], #16`);
+                }
+                asm.push(`    bl ${expr.func}`);
+              }
+            }
+          };
+
+          // Statement Generator
+          const genStmt = (stmt) => {
+            if (stmt.type === 'RETURN') {
+              if (stmt.expr) genExpr(stmt.expr);
+              asm.push(`    mov sp, x29`);
+              asm.push(`    ldp x29, x30, [sp], #${fn.frameSize}`);
+              asm.push(`    ret`);
+            } else if (stmt.type === 'VAR_DECL') {
+              if (stmt.initExpr) {
+                genExpr(stmt.initExpr);
+                const loc = fn.locals.get(stmt.name);
+                asm.push(`    str x0, [x29, #${loc.offset}]`);
+              }
+            } else if (stmt.type === 'ASSIGN') {
+              genExpr(stmt.expr);
+              const loc = fn.locals.get(stmt.name);
+              if (!loc) throw new Error(`Unknown variable: ${stmt.name}`);
+              asm.push(`    str x0, [x29, #${loc.offset}]`);
+            } else if (stmt.type === 'EXPR_STMT') {
+              genExpr(stmt.expr);
+            } else if (stmt.type === 'IF') {
+              const lElse = this.newLabel("else");
+              const lEnd = this.newLabel("endif");
+              genExpr(stmt.cond);
+              asm.push(`    cmp x0, #0`);
+              asm.push(`    beq ${stmt.elseBody ? lElse : lEnd}`);
+              stmt.thenBody.forEach(genStmt);
+              if (stmt.elseBody) {
+                asm.push(`    b ${lEnd}`);
+                asm.push(`${lElse}:`);
+                stmt.elseBody.forEach(genStmt);
+              }
+              asm.push(`${lEnd}:`);
+            } else if (stmt.type === 'WHILE') {
+              const lStart = this.newLabel("while_start");
+              const lEnd = this.newLabel("while_end");
+              asm.push(`${lStart}:`);
+              genExpr(stmt.cond);
+              asm.push(`    cmp x0, #0`);
+              asm.push(`    beq ${lEnd}`);
+              stmt.body.forEach(genStmt);
+              asm.push(`    b ${lStart}`);
+              asm.push(`${lEnd}:`);
+            } else if (stmt.type === 'FOR') {
+              const lStart = this.newLabel("for_start");
+              const lEnd = this.newLabel("for_end");
+              genStmt(stmt.init);
+              asm.push(`${lStart}:`);
+              genExpr(stmt.cond);
+              asm.push(`    cmp x0, #0`);
+              asm.push(`    beq ${lEnd}`);
+              stmt.body.forEach(genStmt);
+              genExpr(stmt.update);
+              asm.push(`    b ${lStart}`);
+              asm.push(`${lEnd}:`);
+            }
+          };
+
+          fn.body.forEach(genStmt);
+
+          // Epilogue fallback
+          asm.push(`    mov x0, #0`);
+          asm.push(`    mov sp, x29`);
+          asm.push(`    ldp x29, x30, [sp], #${fn.frameSize}`);
+          asm.push(`    ret\n`);
+        }
+
+        // Emit Built-in `printf` Implementation via Direct Linux `sys_write` (64)
+        asm.push(this.emitBuiltinPrintf());
+
+        // Emit Read-Only Data Section (Format Strings)
+        if (this.strings.length > 0) {
+          asm.push(`.section .rodata`);
+          for (const s of this.strings) {
+            asm.push(`${s.label}:`);
+            const escaped = this.escapeStringForAsm(s.text);
+            asm.push(`    .string "${escaped}"`);
+          }
+        }
+
+        return asm.join('\n');
+      }
+
+      escapeStringForAsm(str) {
+        return str
+          .replace(/\\/g, '\\\\')
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, '\\n')
+          .replace(/\t/g, '\\t')
+          .replace(/\r/g, '\\r');
+      }
+
+      emitBuiltinPrintf() {
+        return `
+/* =========================================================================
+ * Built-in printf using native ARM64 Linux syscalls (sys_write: 64)
+ * Supports %d, %s, and standard characters. Zero external libc dependencies.
+ * ========================================================================= */
+.global __sys_printf
+__sys_printf:
+    stp x29, x30, [sp, -128]!
+    mov x29, sp
+
+    stp x1, x2, [x29, 16]
+    stp x3, x4, [x29, 32]
+    stp x5, x6, [x29, 48]
+    str x7, [x29, 64]
+
+    mov x19, x0                 // x19 = format string pointer
+    add x20, x29, #16           // x20 = argument pointer
+
+.Lprint_loop:
+    ldrb w21, [x19], #1
+    cbz w21, .Lprint_done
+    cmp w21, #'%'
+    beq .Lprint_fmt
+
+    // Direct single character output
+    sub sp, sp, #16
+    strb w21, [sp]
+    mov x0, #1                  // stdout
+    mov x1, sp                  // buffer
+    mov x2, #1                  // length
+    mov x8, #64                 // sys_write
+    svc #0
+    add sp, sp, #16
+    b .Lprint_loop
+
+.Lprint_fmt:
+    ldrb w21, [x19], #1
+    cmp w21, #'%'
+    beq .Lprint_percent
+    cmp w21, #'s'
+    beq .Lprint_str
+    cmp w21, #'d'
+    beq .Lprint_num
+    b .Lprint_loop
+
+.Lprint_percent:
+    sub sp, sp, #16
+    mov w22, #'%'
+    strb w22, [sp]
+    mov x0, #1
+    mov x1, sp
+    mov x2, #1
+    mov x8, #64
+    svc #0
+    add sp, sp, #16
+    b .Lprint_loop
+
+.Lprint_str:
+    ldr x22, [x20], #8          // Load string pointer arg
+    mov x0, x22
+    bl __sys_strlen
+    mov x2, x0                  // Length
+    mov x1, x22                 // Address
+    mov x0, #1                  // stdout
+    mov x8, #64                 // sys_write
+    svc #0
+    b .Lprint_loop
+
+.Lprint_num:
+    ldr x22, [x20], #8          // Load integer arg
+    mov x0, x22
+    bl __sys_print_int
+    b .Lprint_loop
+
+.Lprint_done:
+    ldp x29, x30, [sp], #128
+    ret
+
+/* Helper: string length */
+__sys_strlen:
+    mov x1, x0
+.Lstrlen_loop:
+    ldrb w2, [x1]
+    cbz w2, .Lstrlen_done
+    add x1, x1, #1
+    b .Lstrlen_loop
+.Lstrlen_done:
+    sub x0, x1, x0
+    ret
+
+/* Helper: print signed integer to stdout */
+__sys_print_int:
+    stp x29, x30, [sp, -64]!
+    mov x29, sp
+
+    mov x1, x0
+    add x2, x29, #48            // Buffer end in stack frame
+    mov w3, #0
+    strb w3, [x2]               // Null terminator
+
+    cmp x1, #0
+    bne .Lnum_nonzero
+    sub x2, x2, #1
+    mov w3, #'0'
+    strb w3, [x2]
+    b .Lnum_write
+
+.Lnum_nonzero:
+    mov x4, #0                  // Is negative?
+    cmp x1, #0
+    bge .Lnum_loop
+    neg x1, x1
+    mov x4, #1
+
+.Lnum_loop:
+    cbz x1, .Lnum_check_neg
+    mov x5, #10
+    udiv x6, x1, x5
+    msub x7, x6, x5, x1         // x7 = x1 % 10
+    add w7, w7, #'0'
+    sub x2, x2, #1
+    strb w7, [x2]
+    mov x1, x6
+    b .Lnum_loop
+
+.Lnum_check_neg:
+    cbz x4, .Lnum_write
+    sub x2, x2, #1
+    mov w3, #'-'
+    strb w3, [x2]
+
+.Lnum_write:
+    add x3, x29, #48
+    sub x3, x3, x2              // Length
+    mov x0, #1                  // stdout
+    mov x1, x2                  // buffer address
+    mov x2, x3                  // count
+    mov x8, #64                 // sys_write
+    svc #0
+
+    ldp x29, x30, [sp], #64
+    ret
+`;
+      }
+    }
+
+    // --- UI CONTROLLER & SYNCHRONIZATION ---
+    const cInput = document.getElementById('cInput');
+    const asmOutput = document.getElementById('asmOutput').querySelector('code');
+    const cLineNumbers = document.getElementById('cLineNumbers');
+    const asmLineNumbers = document.getElementById('asmLineNumbers');
+    const compileBtn = document.getElementById('compileBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const exampleSelect = document.getElementById('exampleSelect');
+    const errorPane = document.getElementById('errorPane');
+    const cLinesStatus = document.getElementById('cLinesStatus');
+    const asmStatus = document.getElementById('asmStatus');
+
+    function updateLineNumbers(textarea, lineNumContainer) {
+      const lineCount = textarea.value.split('\n').length;
+      let nums = [];
+      for (let i = 1; i <= lineCount; i++) {
+        nums.push(i);
+      }
+      lineNumContainer.textContent = nums.join('\n');
+      cLinesStatus.textContent = `Lines: ${lineCount}`;
+    }
+
+    function updateAsmLineNumbers(asmText) {
+      const lineCount = asmText.split('\n').length;
+      let nums = [];
+      for (let i = 1; i <= lineCount; i++) {
+        nums.push(i);
+      }
+      asmLineNumbers.textContent = nums.join('\n');
+    }
+
+    function doCompile() {
+      const errBox = document.getElementById('error-pane');
+      errBox.style.display = 'none';
+      errBox.textContent = '';
+      asmStatus.textContent = "Compiling...";
+
+      try {
+        const compiler = new Compiler(cInput.value);
+        const resultAssembly = compiler.compile();
+        asmOutput.textContent = resultAssembly;
+        updateAsmLineNumbers(resultAssembly);
+        asmStatus.textContent = "Assembly generated";
+      } catch (err) {
+        errBox.style.display = 'block';
+        errBox.textContent = err.message;
+        asmStatus.textContent = "Error";
+      }
+    }
+
+    // Event Handlers
+    cInput.addEventListener('input', () => {
+      updateLineNumbers(cInput, cLineNumbers);
+      doCompile();
+    });
+
+    cInput.addEventListener('scroll', () => {
+      cLineNumbers.scrollTop = cInput.scrollTop;
+    });
+
+    compileBtn.addEventListener('click', doCompile);
+
+    exampleSelect.addEventListener('change', (e) => {
+      const key = e.target.value;
+      if (EXAMPLES[key]) {
+        cInput.value = EXAMPLES[key];
+        updateLineNumbers(cInput, cLineNumbers);
+        doCompile();
+      }
+    });
+
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(asmOutput.textContent).then(() => {
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => copyBtn.textContent = orig, 1500);
+      });
+    });
+
+    // Keyboard support: Tab key handling
+    cInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        this.value = this.value.substring(0, start) + "    " + this.value.substring(end);
+        this.selectionStart = this.selectionEnd = start + 4;
+        updateLineNumbers(cInput, cLineNumbers);
+      }
+    });
+
+    // Initialize Default
+    cInput.value = EXAMPLES.hello;
+    updateLineNumbers(cInput, cLineNumbers);
+    doCompile();
+  </script>
+</body>
+</html>
